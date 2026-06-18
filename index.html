@@ -422,7 +422,7 @@ function flag(n){return FLAGS[n]||'🏳️'}
 /* ═══════════════════════════════════════════════════════
    ESTADO GLOBAL
 ═══════════════════════════════════════════════════════ */
-let supabase = null;
+let sbClient = null;
 let currentUser = null;  // { ci, nombre, id, is_admin }
 let allMatches  = [];
 let todayMatches = [];
@@ -446,7 +446,7 @@ async function init() {
   configOk = true;
 
   // Init Supabase
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // Restaurar sesión del localStorage
   const savedCI = localStorage.getItem('wc26_ci');
@@ -661,7 +661,7 @@ async function savePrediction(matchId, team1, team2) {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px"></span>'; }
 
   try {
-    const { error } = await supabase.from('predictions').upsert({
+    const { error } = await sbClient.from('predictions').upsert({
       user_id: currentUser.id,
       match_id: matchId,
       team1, team2, goals1: g1, goals2: g2,
@@ -681,9 +681,9 @@ async function savePrediction(matchId, team1, team2) {
 }
 
 async function loadUserPredictions() {
-  if (!currentUser || !supabase) return;
+  if (!currentUser || !sbClient) return;
   try {
-    const { data } = await supabase.from('predictions').select('*').eq('user_id', currentUser.id);
+    const { data } = await sbClient.from('predictions').select('*').eq('user_id', currentUser.id);
     userPredictions = {};
     (data||[]).forEach(p => { userPredictions[p.match_id] = { goals1: p.goals1, goals2: p.goals2 }; });
   } catch(e) {}
@@ -709,11 +709,11 @@ function pointsBadge(pts) {
    SUPABASE: RANKING
 ═══════════════════════════════════════════════════════ */
 async function loadRanking() {
-  if (!supabase) return;
+  if (!sbClient) return;
   try {
     // Trae todas las predicciones con usuario
-    const { data: preds } = await supabase.from('predictions').select('*, users(nombre, ci)');
-    const { data: users } = await supabase.from('users').select('*');
+    const { data: preds } = await sbClient.from('predictions').select('*, users(nombre, ci)');
+    const { data: users } = await sbClient.from('users').select('*');
 
     // Calcular puntos usando resultados reales de los partidos
     const userScore = {};
@@ -875,19 +875,19 @@ async function handleLogin() {
 
   try {
     // Buscar usuario por CI
-    const { data: existing } = await supabase.from('users').select('*').eq('ci', ci).single();
+    const { data: existing } = await sbClient.from('users').select('*').eq('ci', ci).single();
 
     let user;
     if (existing) {
       // Usuario encontrado → actualizar nombre si cambió
       if (existing.nombre !== nombre) {
-        await supabase.from('users').update({ nombre }).eq('id', existing.id);
+        await sbClient.from('users').update({ nombre }).eq('id', existing.id);
       }
       user = { ...existing, nombre };
       showToast(`👋 Bienvenido de vuelta, ${nombre.split(' ')[0]}!`);
     } else {
       // Nuevo usuario → insertar
-      const { data: newUser, error } = await supabase.from('users').insert({ ci, nombre }).select().single();
+      const { data: newUser, error } = await sbClient.from('users').insert({ ci, nombre }).select().single();
       if (error) throw error;
       user = newUser;
       showToast(`🎉 ¡Registrado! Bienvenido ${nombre.split(' ')[0]}`);
@@ -949,10 +949,10 @@ function updateHeaderUser() {
    ADMIN
 ═══════════════════════════════════════════════════════ */
 async function loadAdminUsers() {
-  if (!currentUser?.is_admin || !supabase) return;
+  if (!currentUser?.is_admin || !sbClient) return;
   try {
-    const { data: users } = await supabase.from('users').select('*').order('created_at', {ascending:false});
-    const { data: preds } = await supabase.from('predictions').select('user_id');
+    const { data: users } = await sbClient.from('users').select('*').order('created_at', {ascending:false});
+    const { data: preds } = await sbClient.from('predictions').select('user_id');
     const predCount = {};
     (preds||[]).forEach(p => { predCount[p.user_id] = (predCount[p.user_id]||0)+1; });
 
